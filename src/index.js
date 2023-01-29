@@ -1,9 +1,11 @@
 import './css/styles.css';
 import { Notify } from 'notiflix/build/notiflix-notify-aio';
 import ApiService from './fetchImages';
+import throttle from 'lodash.throttle';
+import { renderCardsOfImages } from './renderMarkup';
 
 const form = document.querySelector('#search-form');
-const gallery = document.querySelector('.gallery');
+export const gallery = document.querySelector('.gallery');
 const loadMore = document.querySelector('.load-more');
 import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
@@ -11,7 +13,11 @@ import 'simplelightbox/dist/simple-lightbox.min.css';
 const apiService = new ApiService();
 
 form.addEventListener('submit', onSubmitForm);
-loadMore.addEventListener('click', onLoadMoreBtnClick);
+// Закоментована функціональність кнопки Завантажити більше
+// Для ввімкнення даної можливості слід розкоментувати всі коментарі
+// і закоментувати блок Обробка при скролі
+
+// loadMore.addEventListener('click', onLoadMoreBtnClick);
 btnHidden();
 
 function onSubmitForm(event) {
@@ -26,11 +32,11 @@ function onSubmitForm(event) {
   }
   apiService.resetPage();
   apiService.fetchImages().then(photos => {
-    if (photos.totalHits > 40) {
-      btnVisualy();
-    } else {
-      btnHidden();
-    }
+    // if (photos.totalHits > 40) {
+    //   btnVisualy();
+    // } else {
+    //   btnHidden();
+    // }
     Notify.info(`Hooray! We found ${photos.totalHits} images.`);
     clearGallery();
     renderCardsOfImages(photos.hits);
@@ -40,50 +46,6 @@ function onSubmitForm(event) {
     }).refresh();
   });
 }
-
-function onLoadMoreBtnClick() {
-  apiService.fetchImages().then(photos => {
-    if (photos.totalHits / 40 > apiService.page) {
-      btnVisualy();
-    } else {
-      Notify.failure(
-        "We're sorry, but you've reached the end of search results."
-      );
-      btnHidden();
-    }
-    renderCardsOfImages(photos.hits);
-    const lightbox = new SimpleLightbox('.gallery a', {
-      captionsData: 'alt',
-      captionDelay: 250,
-    }).refresh();
-  });
-}
-
-function renderCardsOfImages(cards) {
-  const markup = cards
-    .map(card => {
-      return `<a href="${card.largeImageURL}"><div class="photo-card">
-  <img src="${card.webformatURL}" alt="${card.tags}" loading="lazy" />
-  <div class="info">
-    <p class="info-item">
-      <b>Likes ${card.likes}</b>
-    </p>
-    <p class="info-item">
-      <b>Views ${card.views}</b>
-    </p>
-    <p class="info-item">
-      <b>Comments ${card.comments}</b>
-    </p>
-    <p class="info-item">
-      <b>Downloads ${card.downloads}</b>
-    </p>
-  </div>
-</div></a>`;
-    })
-    .join('');
-  gallery.insertAdjacentHTML('beforeend', markup);
-}
-
 function clearGallery() {
   gallery.innerHTML = '';
 }
@@ -94,4 +56,47 @@ function btnHidden() {
 
 function btnVisualy() {
   loadMore.classList.remove('is-hidden');
+}
+
+// function onLoadMoreBtnClick() {
+//   apiService.fetchImages().then(photos => {
+//     if (photos.totalHits / 40 > apiService.page) {
+//       btnVisualy();
+//     } else {
+//       Notify.failure(
+//         "We're sorry, but you've reached the end of search results."
+//       );
+//       btnHidden();
+//     }
+//     renderCardsOfImages(photos.hits);
+//     const lightbox = new SimpleLightbox('.gallery a', {
+//       captionsData: 'alt',
+//       captionDelay: 250,
+//     }).refresh();
+//   });
+// }
+
+// =================== Обробка при скролі =============================
+
+function onLoadMoreScroll() {
+  apiService.fetchImages().then(photos => {
+    if (photos.totalHits / 40 < apiService.page - 1) {
+      Notify.failure(
+        "We're sorry, but you've reached the end of search results."
+      );
+    }
+    renderCardsOfImages(photos.hits);
+    const lightbox = new SimpleLightbox('.gallery a', {
+      captionsData: 'alt',
+      captionDelay: 250,
+    }).refresh();
+  });
+}
+window.addEventListener('scroll', throttle(onScrollCards, 100));
+
+function onScrollCards() {
+  const documentRect = document.documentElement.getBoundingClientRect();
+  if (documentRect.bottom < document.documentElement.clientHeight + 150) {
+    onLoadMoreScroll();
+  }
 }
